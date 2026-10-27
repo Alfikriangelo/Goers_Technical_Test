@@ -1,0 +1,20 @@
+# Dependencies
+**/node_modules/
+**/vendor/
+
+# Environment files
+**/.env
+**/.env.backup
+**/.env.production
+
+# Build files
+**/dist/
+**/build/
+
+# SQLite databases
+**/database/*.sqlite-journal
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
