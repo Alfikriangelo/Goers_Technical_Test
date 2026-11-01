@@ -20,10 +20,19 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="APP_TIMEZONE" value="Asia/Jakarta"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
-        <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <env name="DB_DATABASE" value=":memory:"/> -->
+        <!--
+            Tests run against PostgreSQL. `force="true"` guarantees the suite
+            can never fall back to the development database, even inside a
+            container where DB_DATABASE is already exported. The compose stack
+            creates this database via docker/postgres/init.
+        -->
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_DATABASE" value="goers_test" force="true"/>
+        <env name="DB_USERNAME" value="goers" force="true"/>
+        <env name="DB_PASSWORD" value="goers_secret" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

@@ -25,14 +25,14 @@ class AuthController extends Controller
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Kredensial yang diberikan tidak cocok dengan data kami.'],
+                'email' => ['These credentials do not match our records.'],
             ]);
         }
 
         $token = $user->createToken('admin-api-token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Login berhasil',
+            'message' => 'Signed in successfully',
             'user'    => [
                 'id'    => $user->id,
                 'name'  => $user->name,
@@ -50,7 +50,7 @@ class AuthController extends Controller
         $request->user()?->currentAccessToken()?->delete();
 
         return response()->json([
-            'message' => 'Logout berhasil',
+            'message' => 'Signed out successfully',
         ]);
     }
 

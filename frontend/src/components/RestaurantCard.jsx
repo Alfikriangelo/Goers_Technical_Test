@@ -1,116 +1,150 @@
 import React from 'react';
-import { MapPin, Clock, Star, Edit3, Trash2, Calendar } from 'lucide-react';
+import { Star, Edit3, Trash2 } from 'lucide-react';
+import {
+  WEEK_LETTERS,
+  dayHoursLabel,
+  nextOpenDay,
+  resolveTodayIso,
+  formatClock,
+} from '../services/hours.js';
 
 export default function RestaurantCard({
   restaurant,
+  serverDayName = null,
   onViewSchedule,
   onEdit,
   onDelete,
   isAdmin = false,
+  index = 0,
+  order = 0,
 }) {
+  const schedule = restaurant.formatted_schedule || 'Hours not published';
+  const displayIndex = String(index).padStart(2, '0');
+
+  const weekly = Array.isArray(restaurant.weekly_hours) ? restaurant.weekly_hours : [];
+  const todayIso = resolveTodayIso(serverDayName);
+  const todayEntry = weekly.find((day) => day.day_of_week === todayIso);
+  const todayHours = dayHoursLabel(todayEntry);
+  const upcoming = todayEntry && !todayEntry.is_closed ? null : nextOpenDay(weekly, todayIso);
+
   return (
-    <div className="resto-card">
-      {/* Top Banner with Cuisine and Open Status */}
-      <div className="card-header-banner">
-        <div className="banner-pattern"></div>
-        <span className="cuisine-badge">
-          {restaurant.cuisine_type || 'Dining'}
-        </span>
+    <article
+      className="resto-row"
+      style={{ '--i': Math.min(order, 12) }}
+      aria-label={`${restaurant.name}, ${restaurant.is_open_now ? 'open now' : 'closed'}`}
+      onClick={() => onViewSchedule(restaurant)}
+      role="button"
+      tabIndex={0}
+      title="Click to view weekly schedule"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewSchedule(restaurant);
+        }
+      }}
+    >
+      <span className="row-index mono">{displayIndex}</span>
 
-        {restaurant.is_open_now ? (
-          <span className="status-badge open">
-            <span className="pulse-dot"></span>
-            Open Now
-          </span>
+      <div className="row-main">
+        <h3 className="row-name" title={restaurant.name}>
+          {restaurant.name}
+        </h3>
+        <span className="row-cuisine">{restaurant.cuisine_type || 'Dining'}</span>
+        {restaurant.address && <p className="row-address">{restaurant.address}</p>}
+      </div>
+
+      <div className="row-hours">
+        <span className="row-label">Hours</span>
+        {weekly.length > 0 ? (
+          <>
+            <p
+              className={`row-hours-today${todayHours ? '' : ' is-closed'}`}
+              title={schedule}
+            >
+              {todayHours ?? `Closed today${upcoming ? ` · Opens ${upcoming.name} ${formatClock(upcoming.at)}` : ''}`}
+            </p>
+            <div
+              className="row-week"
+              title={schedule}
+              aria-label={`Weekly hours: ${weekly
+                .map((day) => `${day.day_name} ${dayHoursLabel(day) ?? 'closed'}`)
+                .join(', ')}`}
+            >
+              {weekly.map((day) => (
+                <span
+                  key={day.day_of_week}
+                  className={[
+                    'week-day',
+                    day.is_closed ? 'off' : '',
+                    day.day_of_week === todayIso ? 'today' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {WEEK_LETTERS[day.day_of_week - 1]}
+                </span>
+              ))}
+            </div>
+          </>
         ) : (
-          <span className="status-badge closed">
-            Closed
-          </span>
+          <p className="row-hours-text" title={schedule}>
+            {schedule}
+          </p>
         )}
       </div>
 
-      {/* Main Content */}
-      <div className="card-body">
-        <h3 className="resto-name">{restaurant.name}</h3>
-
-        <p className="resto-address">
-          <MapPin size={14} style={{ color: '#818cf8', flexShrink: 0 }} />
-          <span>{restaurant.address || 'San Francisco, CA'}</span>
-        </p>
-
-        {restaurant.description && (
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.4 }}>
-            {restaurant.description}
-          </p>
-        )}
-
-        {/* Operating Hours Box */}
-        <div className="schedule-box">
-          <div className="schedule-header">
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <Clock size={13} style={{ color: '#6366f1' }} />
-              OPERATING HOURS
-            </span>
-            <button
-              onClick={() => onViewSchedule(restaurant)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#818cf8',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.2rem'
-              }}
-              title="View daily breakdown"
-            >
-              <Calendar size={12} />
-              Details
-            </button>
-          </div>
-          <p className="schedule-raw-text">
-            {restaurant.formatted_schedule || restaurant.raw_schedule}
-          </p>
-        </div>
+      <div className="row-rating">
+        <Star size={12} strokeWidth={1.4} fill="#b1502a" color="#b1502a" aria-hidden="true" />
+        <span>{Number(restaurant.rating ?? 4.5).toFixed(1)}</span>
       </div>
 
-      {/* Footer with Rating & Admin Actions */}
-      <div className="card-footer">
-        <div className="rating-badge">
-          <Star size={15} fill="#fbbf24" stroke="#fbbf24" />
-          <span>{Number(restaurant.rating || 4.5).toFixed(1)}</span>
-        </div>
+      <div className={`row-status ${restaurant.is_open_now ? 'open' : ''}`}>
+        <span className={`dot ${restaurant.is_open_now ? 'open' : ''}`} aria-hidden="true" />
+        {restaurant.is_open_now ? 'Open now' : 'Closed now'}
+      </div>
 
-        {isAdmin ? (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => onEdit(restaurant)}
-              title="Edit Restaurant"
-            >
-              <Edit3 size={14} />
-              Edit
-            </button>
-            <button
-              className="btn btn-danger btn-sm"
-              onClick={() => onDelete(restaurant)}
-              title="Delete Restaurant"
-            >
-              <Trash2 size={14} />
-              Delete
-            </button>
-          </div>
-        ) : (
+      <div className="row-actions">
+        <button
+          type="button"
+          className="link-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewSchedule(restaurant);
+          }}
+        >
+          Weekly hours
+        </button>
+
+        {isAdmin && onEdit && (
           <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => onViewSchedule(restaurant)}
+            type="button"
+            className="btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(restaurant);
+            }}
+            title={`Edit ${restaurant.name}`}
+            aria-label={`Edit ${restaurant.name}`}
           >
-            Weekly Schedule
+            <Edit3 size={15} strokeWidth={1.6} />
+          </button>
+        )}
+
+        {onDelete && (
+          <button
+            type="button"
+            className="btn-icon danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(restaurant);
+            }}
+            title={`Delete ${restaurant.name}`}
+            aria-label={`Delete ${restaurant.name}`}
+          >
+            <Trash2 size={15} strokeWidth={1.6} />
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 }

@@ -1,5 +1,15 @@
 import React from 'react';
-import { Search, Calendar, Clock, RotateCcw, Sparkles, Moon, Sun, Utensils } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { toLocalDate } from '../services/dates';
+
+const PRESETS = [
+  { key: 'open_now', label: 'Open now' },
+  { key: 'today', label: 'Today' },
+  { key: 'tomorrow', label: 'Tomorrow' },
+  { key: 'lunch', label: 'Lunch 12:00' },
+  { key: 'dinner', label: 'Dinner 19:00' },
+  { key: 'late_night', label: 'Late night 01:00' },
+];
 
 export default function FilterPanel({
   filters,
@@ -7,141 +17,96 @@ export default function FilterPanel({
   onResetFilters,
   onQuickPreset,
 }) {
-  const getTodayDateString = (offsetDays = 0) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    return d.toISOString().split('T')[0];
+  const today = toLocalDate();
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = toLocalDate(tomorrowDate);
+
+  const isActive = (key) => {
+    switch (key) {
+      case 'open_now':
+        return filters.open_now;
+      case 'today':
+        return !filters.open_now && filters.date === today;
+      case 'tomorrow':
+        return !filters.open_now && filters.date === tomorrow;
+      case 'lunch':
+        return !filters.open_now && filters.time === '12:00';
+      case 'dinner':
+        return !filters.open_now && filters.time === '19:00';
+      case 'late_night':
+        return !filters.open_now && filters.time === '01:00';
+      default:
+        return false;
+    }
   };
 
   return (
-    <div className="filter-panel">
-      <div className="filter-grid">
-        {/* 1. Filter Nama Restoran */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="filter-name">
-            <Search size={15} />
-            Search Restaurant Name
-          </label>
-          <input
-            id="filter-name"
-            type="text"
-            className="form-input"
-            placeholder="e.g. Cheesecake, Sushi, Indian..."
-            value={filters.name}
-            onChange={(e) => onFilterChange('name', e.target.value)}
-          />
-        </div>
+    <div className="query">
+      <div className="query-grid">
+        <label className="field field-search" htmlFor="filter-name">
+          <span className="field-label">Restaurant name</span>
+          <span className="field-control">
+            <Search size={15} strokeWidth={1.6} className="field-icon" />
+            <input
+              id="filter-name"
+              type="text"
+              className="field-input"
+              placeholder="Cheesecake, sushi, Indian…"
+              value={filters.name}
+              onChange={(e) => onFilterChange('name', e.target.value)}
+            />
+          </span>
+        </label>
 
-        {/* 2. Filter Tanggal */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="filter-date">
-            <Calendar size={15} />
-            Specific Date
-          </label>
+        <label className="field" htmlFor="filter-date">
+          <span className="field-label">Date</span>
           <input
             id="filter-date"
             type="date"
-            className="form-input"
+            className="field-input"
             value={filters.date}
             onChange={(e) => {
               onFilterChange('date', e.target.value);
-              // If date is set manually, disable open_now flag
               if (filters.open_now) onFilterChange('open_now', false);
             }}
           />
-        </div>
+        </label>
 
-        {/* 3. Filter Jam */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="filter-time">
-            <Clock size={15} />
-            Specific Time
-          </label>
+        <label className="field" htmlFor="filter-time">
+          <span className="field-label">Hour</span>
           <input
             id="filter-time"
             type="time"
-            className="form-input"
+            className="field-input"
             value={filters.time}
             onChange={(e) => {
               onFilterChange('time', e.target.value);
               if (filters.open_now) onFilterChange('open_now', false);
             }}
           />
-        </div>
+        </label>
 
-        {/* Reset Button */}
-        <div className="form-group">
-          <button
-            id="btn-reset-filters"
-            className="btn btn-secondary"
-            onClick={onResetFilters}
-            title="Clear all filters"
-          >
-            <RotateCcw size={16} />
-            Reset
+        <div className="query-actions">
+          <button id="btn-reset-filters" type="button" className="btn btn-quiet" onClick={onResetFilters}>
+            Clear query
           </button>
         </div>
       </div>
 
-      {/* Quick Filter Presets */}
-      <div className="quick-pills">
-        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginRight: '0.25rem' }}>
-          Quick Filters:
-        </span>
-
-        {/* Open Right Now */}
-        <button
-          className={`pill-btn ${filters.open_now ? 'active' : ''}`}
-          onClick={() => onQuickPreset('open_now')}
-        >
-          <Sparkles size={13} />
-          Open Right Now
-        </button>
-
-        {/* Today */}
-        <button
-          className={`pill-btn ${filters.date === getTodayDateString(0) && !filters.open_now ? 'active' : ''}`}
-          onClick={() => onQuickPreset('today')}
-        >
-          <Calendar size={13} />
-          Today
-        </button>
-
-        {/* Tomorrow */}
-        <button
-          className={`pill-btn ${filters.date === getTodayDateString(1) ? 'active' : ''}`}
-          onClick={() => onQuickPreset('tomorrow')}
-        >
-          <Calendar size={13} />
-          Tomorrow
-        </button>
-
-        {/* Lunch 12:00 */}
-        <button
-          className={`pill-btn ${filters.time === '12:00' ? 'active' : ''}`}
-          onClick={() => onQuickPreset('lunch')}
-        >
-          <Sun size={13} />
-          Lunch (12:00)
-        </button>
-
-        {/* Dinner 19:00 */}
-        <button
-          className={`pill-btn ${filters.time === '19:00' ? 'active' : ''}`}
-          onClick={() => onQuickPreset('dinner')}
-        >
-          <Utensils size={13} />
-          Dinner (19:00)
-        </button>
-
-        {/* Late Night 01:00 (Midnight Crossover Test) */}
-        <button
-          className={`pill-btn ${filters.time === '01:00' ? 'active' : ''}`}
-          onClick={() => onQuickPreset('late_night')}
-        >
-          <Moon size={13} />
-          Late Night (01:00 AM)
-        </button>
+      <div className="presets">
+        <span className="presets-label">Shortcuts</span>
+        {PRESETS.map((preset) => (
+          <button
+            key={preset.key}
+            type="button"
+            className={`tag ${isActive(preset.key) ? 'active' : ''}`}
+            aria-pressed={isActive(preset.key)}
+            onClick={() => onQuickPreset(preset.key)}
+          >
+            {preset.label}
+          </button>
+        ))}
       </div>
     </div>
   );

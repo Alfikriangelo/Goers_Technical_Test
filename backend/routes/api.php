@@ -18,13 +18,12 @@ Route::get('/stats', [RestaurantController::class, 'stats']);
 // Authentication Endpoints
 Route::post('/auth/login', [AuthController::class, 'login']);
 
-// Protected / Admin Endpoints
+// Protected / Admin Endpoints (require a valid Sanctum token)
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-});
 
-// Admin Restaurant Management Endpoints (can be accessed with or without sanctum token)
-Route::post('/restaurants', [RestaurantController::class, 'store']);
-Route::put('/restaurants/{id}', [RestaurantController::class, 'update']);
-Route::delete('/restaurants/{id}', [RestaurantController::class, 'destroy']);
+    Route::post('/restaurants', [RestaurantController::class, 'store']);
+    Route::put('/restaurants/{id}', [RestaurantController::class, 'update']);
+    Route::delete('/restaurants/{id}', [RestaurantController::class, 'destroy']);
+});

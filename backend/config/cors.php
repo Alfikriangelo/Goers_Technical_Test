@@ -17,13 +17,29 @@ return [
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => ['*'],
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed Origins
+    |--------------------------------------------------------------------------
+    | In development the Vite dev server proxies all /api/* requests through
+    | itself, so CORS is not exercised. For direct cross-origin access set
+    | CORS_ALLOWED_ORIGINS in your .env file to a comma-separated list of
+    | trusted origins (e.g. "http://localhost:5173,https://app.example.com").
+    | Avoid '*' in production — it allows any website to call your write API.
+    |
+    */
+    'allowed_origins' => array_filter(
+        array_map(
+            'trim',
+            explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173'))
+        )
+    ),
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
 
     'exposed_headers' => [],
 

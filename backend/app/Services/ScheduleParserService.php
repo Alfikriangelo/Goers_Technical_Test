@@ -29,7 +29,14 @@ class ScheduleParserService
 
     /**
      * Parse a raw schedule string into structured array of shifts.
-     * Example input: "Mon-Thu, Sun 11:30 am - 9 pm / Fri-Sat 11:30 am - 9:30 pm"
+     *
+     * Example input:
+     * "Mon-Thu, Sun 11:30 am - 9 pm / Fri-Sat 11:30 am - 9:30 pm"
+     * "Mon-Fri 11:30 am - 2:30 pm & 5 pm - 10 pm / Sat-Sun 10 am - 3 pm"
+     *
+     * A section may describe more than one service per day. Those services are
+     * separated with "&", ";" or "+", so lunch and dinner can live on the same
+     * weekday without inventing a second section for the same days.
      *
      * @param string $rawSchedule
      * @return array<int, array{day_of_week: int, open_time: string, close_time: string, spans_next_day: bool}>
@@ -59,12 +66,26 @@ class ScheduleParserService
             }
         }
 
-        return $allShifts;
+        // Overlapping day groups (e.g. "Mon-Sun ... / Mon ...") must not create
+        // duplicate rows for the same service.
+        $unique = [];
+        foreach ($allShifts as $shift) {
+            $key = implode('|', [
+                $shift['day_of_week'],
+                $shift['open_time'],
+                $shift['close_time'],
+                (int) $shift['spans_next_day'],
+            ]);
+            $unique[$key] = $shift;
+        }
+
+        return array_values($unique);
     }
 
     /**
      * Parse an individual section like:
      * "Mon-Thu, Sun 11:30 am - 9 pm"
+     * "Mon-Fri 11:30 am - 2:30 pm & 5 pm - 10 pm"
      * "Tues 12:15 pm - 12:15 pm"
      * "Mon, Wed-Sun 11 am - 10 pm"
      */
@@ -72,26 +93,47 @@ class ScheduleParserService
     {
         $section = trim($section);
 
-        // Regex to split into [Days part] and [Time range part]
-        // Time range starts with a digit followed by optional :min and am/pm
-        if (!preg_match('/^(.*?)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm))$/i', $section, $matches)) {
+        // Split into [days part] and [time ranges part]. The days part ends at
+        // the first clock token, so the service separator logic below only has
+        // to deal with times.
+        if (!preg_match('/^(.*?)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm).*)$/i', $section, $matches)) {
             throw new InvalidArgumentException("Unable to parse section format: '{$section}'");
         }
 
         $daysPart = trim($matches[1]);
         $timesPart = trim($matches[2]);
 
+        if ($daysPart === '') {
+            throw new InvalidArgumentException("Missing days in section: '{$section}'");
+        }
+
         $days = $this->parseDaysPart($daysPart);
-        [$openTime, $closeTime, $spansNextDay] = $this->parseTimeRange($timesPart);
+        $timeRanges = preg_split('/\s*(?:&|;|\+)\s*/', $timesPart) ?: [];
 
         $results = [];
-        foreach ($days as $day) {
-            $results[] = [
-                'day_of_week'    => $day,
-                'open_time'      => $openTime,
-                'close_time'     => $closeTime,
-                'spans_next_day' => $spansNextDay,
-            ];
+        foreach ($timeRanges as $timeRange) {
+            $timeRange = trim($timeRange);
+
+            if (!preg_match('/^\d{1,2}(?::\d{2})?\s*(?:am|pm)\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)$/i', $timeRange)) {
+                throw new InvalidArgumentException("Unable to parse time range: '{$timeRange}' in section '{$section}'");
+            }
+
+            [$openTime, $closeTime, $spansNextDay] = $this->parseTimeRange($timeRange);
+
+            // A zero-length window (e.g. "12:15 pm - 12:15 pm") cannot match
+            // any real dining time; the source uses it to mean "closed".
+            if ($openTime === $closeTime) {
+                continue;
+            }
+
+            foreach ($days as $day) {
+                $results[] = [
+                    'day_of_week'    => $day,
+                    'open_time'      => $openTime,
+                    'close_time'     => $closeTime,
+                    'spans_next_day' => $spansNextDay,
+                ];
+            }
         }
 
         return $results;

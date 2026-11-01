@@ -1,0 +1,17 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Goers PostgreSQL",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "goers",
+      "Username": "goers",
+      "SSLMode": "prefer",
+      "Shared": false,
+      "Comment": "Database development Goers (container db:5432)",
+      "PasswordExecCommand": "echo goers_secret",
+      "PasswordExecExpiration": 0
+    }
+  }
+}

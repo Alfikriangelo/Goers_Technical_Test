@@ -1,0 +1,30 @@
+# Version control & tooling
+.git
+.gitignore
+.idea
+.vscode
+
+# Dependencies are installed inside the image
+**/node_modules
+**/vendor
+
+# Build output is produced inside the image
+**/dist
+**/build
+**/.phpunit.cache
+**/.phpunit.result.cache
+
+# Never bake local secrets or local databases into an image
+**/.env
+**/.env.*
+!**/.env.example
+**/*.sqlite
+**/*.sqlite-journal
+**/storage/logs/*
+**/storage/framework/cache/*
+**/storage/framework/sessions/*
+**/storage/framework/views/*
+
+# Documentation & screenshots are not needed at runtime
+docs
+*.md

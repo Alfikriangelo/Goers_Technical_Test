@@ -11,8 +11,14 @@
 **/dist/
 **/build/
 
-# SQLite databases
+# SQLite databases (legacy local driver; PostgreSQL is the default now)
+**/database/*.sqlite
 **/database/*.sqlite-journal
+**/database/*.sqlite-shm
+**/database/*.sqlite-wal
+
+# PostgreSQL / Docker data dumps
+**/pgdata/
 
 # OS files
 .DS_Store

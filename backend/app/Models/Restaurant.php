@@ -14,7 +14,6 @@ class Restaurant extends Model
 
     protected $fillable = [
         'name',
-        'raw_schedule',
         'address',
         'cuisine_type',
         'rating',
@@ -100,33 +99,19 @@ class Restaurant extends Model
     }
 
     /**
-     * Human-friendly formatted schedule string.
+     * Human-friendly weekly summary built from the structured shifts.
+     *
+     * Shifts are the only source of truth; nothing is read from a stored raw
+     * string. The summary is display-only and never persisted.
      */
     public function getFormattedScheduleAttribute(): string
     {
-        if (!empty($this->raw_schedule)) {
-            return $this->raw_schedule;
+        $this->loadMissing('schedules');
+
+        if ($this->schedules->isEmpty()) {
+            return 'Hours not published';
         }
 
-        if (!$this->relationLoaded('schedules') || $this->schedules->isEmpty()) {
-            return 'Hours not specified';
-        }
-
-        // Group schedules by hours
-        $grouped = [];
-        foreach ($this->schedules as $schedule) {
-            $open = Carbon::createFromFormat('H:i:s', $schedule->open_time)->format('g:i a');
-            $close = Carbon::createFromFormat('H:i:s', $schedule->close_time)->format('g:i a');
-            $timeStr = "{$open} - {$close}";
-            $grouped[$timeStr][] = $schedule->day_name_short;
-        }
-
-        $parts = [];
-        foreach ($grouped as $timeStr => $days) {
-            $dayList = implode(', ', $days);
-            $parts[] = "{$dayList} {$timeStr}";
-        }
-
-        return implode(' / ', $parts);
+        return app(\App\Services\ScheduleFormatterService::class)->summary($this->schedules);
     }
 }

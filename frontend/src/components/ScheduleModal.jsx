@@ -1,130 +1,136 @@
-import React from 'react';
-import { X, Clock, Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { X } from 'lucide-react';
 
-const DAYS_OF_WEEK = [
-  { id: 1, name: 'Monday', short: 'Mon' },
-  { id: 2, name: 'Tuesday', short: 'Tue' },
-  { id: 3, name: 'Wednesday', short: 'Wed' },
-  { id: 4, name: 'Thursday', short: 'Thu' },
-  { id: 5, name: 'Friday', short: 'Fri' },
-  { id: 6, name: 'Saturday', short: 'Sat' },
-  { id: 7, name: 'Sunday', short: 'Sun' },
-];
+function formatTime(timeStr) {
+  if (!timeStr) return '';
+  const [hours, minutes] = timeStr.split(':');
+  const h = parseInt(hours, 10);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const display = h % 12 || 12;
+  return `${display}:${minutes} ${suffix}`;
+}
 
 export default function ScheduleModal({ restaurant, onClose }) {
+  useEffect(() => {
+    if (!restaurant) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [restaurant, onClose]);
+
   if (!restaurant) return null;
 
-  // Format 24h time to 12h display
-  const formatTime = (timeStr) => {
-    if (!timeStr) return '';
-    const [hours, minutes] = timeStr.split(':');
-    const h = parseInt(hours, 10);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const formattedH = h % 12 || 12;
-    return `${formattedH}:${minutes} ${ampm}`;
-  };
+  const weekly = Array.isArray(restaurant.weekly_hours) ? restaurant.weekly_hours : [];
+
+  const openDays = weekly.filter((day) => !day.is_closed).length;
+  const shiftCount =
+    restaurant.shifts_per_week ?? weekly.reduce((total, day) => total + day.shifts.length, 0);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="sheet-overlay" onClick={onClose} role="presentation">
+      <div
+        className="sheet"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-sheet-title"
+      >
+        <div className="sheet-head">
           <div>
-            <h2 style={{ fontSize: '1.25rem', color: '#f8fafc' }}>{restaurant.name}</h2>
-            <p style={{ fontSize: '0.825rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.2rem' }}>
-              <Clock size={14} style={{ color: '#818cf8' }} />
-              Structured Operating Hours Breakdown
+            <p className="eyebrow">Weekly shifts</p>
+            <h2 className="sheet-title" id="schedule-sheet-title">
+              {restaurant.name}
+            </h2>
+            <p className="sheet-sub">
+              {restaurant.cuisine_type || 'Dining'} · {restaurant.address || 'San Francisco, CA'}
             </p>
           </div>
-          <button className="close-btn" onClick={onClose}>
-            <X size={20} />
+          <button type="button" className="close-btn" onClick={onClose} aria-label="Close panel">
+            <X size={18} strokeWidth={1.6} />
           </button>
         </div>
 
-        {/* Original Raw Schedule */}
-        <div style={{
-          background: 'rgba(99, 102, 241, 0.1)',
-          border: '1px solid rgba(99, 102, 241, 0.25)',
-          padding: '0.85rem 1.15rem',
-          borderRadius: '12px',
-          marginBottom: '1.5rem',
-          fontSize: '0.85rem',
-        }}>
-          <span style={{ color: '#a5b4fc', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>
-            Original Schedule String:
-          </span>
-          <code style={{ color: '#e0e7ff', fontFamily: 'monospace', fontSize: '0.9rem' }}>
-            {restaurant.raw_schedule || restaurant.formatted_schedule}
-          </code>
+        <div className="sheet-body">
+          <div className="schedule-facts">
+            <div className="schedule-fact">
+              <span className="schedule-fact-label">Open days</span>
+              <strong>
+                {openDays}
+                <span className="schedule-fact-suffix">/7</span>
+              </strong>
+            </div>
+            <div className="schedule-fact">
+              <span className="schedule-fact-label">Weekly services</span>
+              <strong>{shiftCount}</strong>
+            </div>
+            <div className="schedule-fact schedule-fact-wide">
+              <span className="schedule-fact-label">Weekly summary</span>
+              <p>{restaurant.formatted_schedule || 'Hours not published'}</p>
+            </div>
+          </div>
+
+          <div className="shifts-table-wrap">
+            <table className="shifts-table">
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col">Service</th>
+                  <th scope="col">Hours</th>
+                  <th scope="col">Boundary</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weekly.map((day) => {
+                  if (day.is_closed) {
+                    return (
+                      <tr key={day.day_of_week} className="is-closed">
+                        <td className="shift-day">{day.day_name}</td>
+                        <td colSpan={2}>
+                          <span className="shift-state">Closed all day</span>
+                        </td>
+                        <td>
+                          <span className="shift-flag">No service</span>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return day.shifts.map((shift, index) => (
+                    <tr key={`${day.day_of_week}-${shift.open_time}-${index}`}>
+                      {index === 0 && (
+                        <td className="shift-day" rowSpan={day.shifts.length}>
+                          {day.day_name}
+                        </td>
+                      )}
+                      <td>
+                        <span className="shift-service">{shift.service_label}</span>
+                      </td>
+                      <td>
+                        <div className="shift-time">
+                          {formatTime(shift.open_time)} – {formatTime(shift.close_time)}
+                        </div>
+                      </td>
+                      <td>
+                        {shift.spans_next_day ? (
+                          <span className="shift-flag" title="Ends after midnight on the following day">
+                            +1 day
+                          </span>
+                        ) : (
+                          <span className="shift-same">Same day</span>
+                        )}
+                      </td>
+                    </tr>
+                  ));
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Day-by-Day Table */}
-        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.75rem', color: '#cbd5e1' }}>
-          Weekly Schedule Breakdown
-        </h4>
-
-        <table className="shifts-table">
-          <thead>
-            <tr>
-              <th>Day</th>
-              <th>Opening Shift</th>
-              <th>Spans Next Day</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {DAYS_OF_WEEK.map((day) => {
-              const dayShifts = restaurant.schedules?.filter((s) => s.day_of_week === day.id) || [];
-              const isOpen = dayShifts.length > 0;
-
-              return (
-                <tr key={day.id} style={{ background: isOpen ? 'transparent' : 'rgba(255, 255, 255, 0.02)' }}>
-                  <td style={{ fontWeight: 600 }}>{day.name}</td>
-                  <td>
-                    {isOpen ? (
-                      dayShifts.map((s, idx) => (
-                        <div key={idx} style={{ color: '#f1f5f9' }}>
-                          {formatTime(s.open_time)} – {formatTime(s.close_time)}
-                        </div>
-                      ))
-                    ) : (
-                      <span style={{ color: '#ef4444', fontStyle: 'italic' }}>Closed</span>
-                    )}
-                  </td>
-                  <td>
-                    {isOpen && dayShifts.some((s) => s.spans_next_day) ? (
-                      <span style={{
-                        background: 'rgba(245, 158, 11, 0.15)',
-                        color: '#fbbf24',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                      }}>
-                        Past Midnight
-                      </span>
-                    ) : (
-                      <span style={{ color: '#64748b', fontSize: '0.8rem' }}>No</span>
-                    )}
-                  </td>
-                  <td>
-                    {isOpen ? (
-                      <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8rem' }}>
-                        <CheckCircle2 size={14} /> Open
-                      </span>
-                    ) : (
-                      <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8rem' }}>
-                        <AlertCircle size={14} /> Off
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>
+        <div className="sheet-foot">
+          <button type="button" className="btn btn-quiet" onClick={onClose}>
             Close
           </button>
         </div>

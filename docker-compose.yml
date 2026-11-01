@@ -1,0 +1,106 @@
+name: goers
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: goers-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-goers}
+      POSTGRES_USER: ${POSTGRES_USER:-goers}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-goers_secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates the extra `goers_test` database used by `php artisan test`.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Host 55432 -> container 5432 (kept off 5432 because a local PostgreSQL
+      # and another stack already listen there on this machine).
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goers} -d ${POSTGRES_DB:-goers}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: goers-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: Goers
+      APP_ENV: production
+      APP_KEY: "base64:0OIox71Uh5T4hbU+dKn0gG3TqssnUnyrZeY1LSsS2Yo="
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8081
+      APP_TIMEZONE: Asia/Jakarta
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: warning
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: goers
+      DB_USERNAME: goers
+      DB_PASSWORD: goers_secret
+      SESSION_DRIVER: database
+      SESSION_LIFETIME: 120
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      FILESYSTEM_DISK: local
+      SANCTUM_STATEFUL_DOMAINS: localhost:8081,127.0.0.1:8081
+    ports:
+      # Host :8000 -> Apache :80, so the API is reachable directly for docs/Postman.
+      - "8000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 80) ? 0 : 1);'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: goers-pgadmin
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@goers.co
+      PGADMIN_DEFAULT_PASSWORD: password
+      # Never ask for a second "master password" in a local dev stack.
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      # Allows the pre-registered server to read its DB password from a command
+      # (password exec command) instead of pgAdmin's encrypted store.
+      PGADMIN_CONFIG_ENABLE_SERVER_PASS_EXEC_CMD: "True"
+      PGADMIN_DISABLE_POSTFIX: "True"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      # Pre-registers the Goers server, so no manual "Add server" step.
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    ports:
+      # Host 5051 -> pgAdmin :80. Use 5051 because 5050 is taken on this host.
+      - "5051:80"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: goers-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Host 8081 -> nginx :80 (serves the SPA and proxies /api to backend:80)
+      - "8081:80"
+
+volumes:
+  pgdata:
+  pgadmin_data:

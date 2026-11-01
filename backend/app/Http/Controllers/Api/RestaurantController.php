@@ -36,12 +36,14 @@ class RestaurantController extends Controller
 
         // 1. Filter by Name (Search)
         if ($search = $request->input('name') ?? $request->input('q') ?? $request->input('search')) {
-            $query->where('name', 'like', "%{$search}%");
+            // LOWER() keeps the match case-insensitive on PostgreSQL (SQLite's
+            // LIKE is case-insensitive by default, PostgreSQL's is not).
+            $query->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($search).'%']);
         }
 
         // 2. Filter by Cuisine
         if ($cuisine = $request->input('cuisine')) {
-            $query->where('cuisine_type', 'like', "%{$cuisine}%");
+            $query->whereRaw('LOWER(cuisine_type) LIKE ?', ['%'.mb_strtolower($cuisine).'%']);
         }
 
         // 3. Filter by Date and/or Time
@@ -92,6 +94,9 @@ class RestaurantController extends Controller
             return RestaurantResource::collection($restaurants);
         }
 
+        // Clamp to a safe page size so callers cannot dump the entire table.
+        $perPage = max(1, min($perPage, 100));
+
         $restaurants = $query->paginate($perPage);
 
         return RestaurantResource::collection($restaurants)->additional([
@@ -118,38 +123,13 @@ class RestaurantController extends Controller
             $restaurant = DB::transaction(function () use ($validated) {
                 $restaurant = Restaurant::create([
                     'name'         => $validated['name'],
-                    'raw_schedule' => $validated['raw_schedule'] ?? null,
                     'address'      => $validated['address'] ?? null,
                     'cuisine_type' => $validated['cuisine_type'] ?? null,
                     'rating'       => $validated['rating'] ?? 4.5,
                     'description'  => $validated['description'] ?? null,
                 ]);
 
-                // 1. If raw_schedule provided, parse it
-                if (!empty($validated['raw_schedule'])) {
-                    $parsedShifts = $this->parserService->parse($validated['raw_schedule']);
-                    foreach ($parsedShifts as $shift) {
-                        $restaurant->schedules()->create($shift);
-                    }
-                }
-
-                // 2. If structured schedules array provided directly
-                if (!empty($validated['schedules']) && is_array($validated['schedules'])) {
-                    foreach ($validated['schedules'] as $item) {
-                        $open = Carbon::parse($item['open_time'])->format('H:i:s');
-                        $close = Carbon::parse($item['close_time'])->format('H:i:s');
-                        $spans = isset($item['spans_next_day']) 
-                            ? (bool) $item['spans_next_day'] 
-                            : ($close <= $open && $close !== $open);
-
-                        $restaurant->schedules()->create([
-                            'day_of_week'    => (int) $item['day_of_week'],
-                            'open_time'      => $open,
-                            'close_time'     => $close,
-                            'spans_next_day' => $spans,
-                        ]);
-                    }
-                }
+                $this->syncSchedules($restaurant, $validated);
 
                 return $restaurant->load('schedules');
             });
@@ -159,7 +139,7 @@ class RestaurantController extends Controller
                 ->setStatusCode(201);
         } catch (Exception $e) {
             return response()->json([
-                'message' => 'Gagal menyimpan data restoran: ' . $e->getMessage(),
+                'message' => 'Could not save the restaurant: ' . $e->getMessage(),
             ], 422);
         }
     }
@@ -172,7 +152,7 @@ class RestaurantController extends Controller
         $restaurant = Restaurant::with('schedules')->find($id);
 
         if (!$restaurant) {
-            return response()->json(['message' => 'Restoran tidak ditemukan'], 404);
+            return response()->json(['message' => 'Restaurant not found'], 404);
         }
 
         return (new RestaurantResource($restaurant))->response();
@@ -186,7 +166,7 @@ class RestaurantController extends Controller
         $restaurant = Restaurant::find($id);
 
         if (!$restaurant) {
-            return response()->json(['message' => 'Restoran tidak ditemukan'], 404);
+            return response()->json(['message' => 'Restaurant not found'], 404);
         }
 
         $validated = $request->validated();
@@ -195,28 +175,124 @@ class RestaurantController extends Controller
             DB::transaction(function () use ($restaurant, $validated) {
                 $restaurant->update([
                     'name'         => $validated['name'],
-                    'raw_schedule' => $validated['raw_schedule'] ?? $restaurant->raw_schedule,
                     'address'      => $validated['address'] ?? $restaurant->address,
                     'cuisine_type' => $validated['cuisine_type'] ?? $restaurant->cuisine_type,
                     'rating'       => $validated['rating'] ?? $restaurant->rating,
                     'description'  => $validated['description'] ?? $restaurant->description,
                 ]);
 
-                if (!empty($validated['raw_schedule'])) {
-                    $restaurant->schedules()->delete();
-                    $parsedShifts = $this->parserService->parse($validated['raw_schedule']);
-                    foreach ($parsedShifts as $shift) {
-                        $restaurant->schedules()->create($shift);
-                    }
-                }
+                $this->syncSchedules($restaurant, $validated);
             });
 
             return (new RestaurantResource($restaurant->fresh(['schedules'])))->response();
         } catch (Exception $e) {
             return response()->json([
-                'message' => 'Gagal memperbarui restoran: ' . $e->getMessage(),
+                'message' => 'Could not update the restaurant: ' . $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * Replace a restaurant's weekly shifts.
+     *
+     * Structured `schedules` always win. `schedule_text` is an optional import
+     * convenience: it is parsed here and immediately discarded, so the database
+     * only ever contains rows. Omitting both leaves the existing shifts alone;
+     * sending an empty `schedules` array clears the week.
+     */
+    private function syncSchedules(Restaurant $restaurant, array $validated): void
+    {
+        $hasStructuredKey = array_key_exists('schedules', $validated);
+        $structured = $validated['schedules'] ?? null;
+        $scheduleText = $validated['schedule_text'] ?? null;
+
+        if (!$hasStructuredKey && blank($scheduleText)) {
+            return;
+        }
+
+        $rows = [];
+
+        if ($hasStructuredKey && is_array($structured)) {
+            foreach ($structured as $item) {
+                $rows[] = $this->normalizeShift($item);
+            }
+        } elseif (filled($scheduleText)) {
+            $rows = $this->parserService->parse($scheduleText);
+        }
+
+        $rows = $this->deduplicateAndSort($rows);
+
+        $restaurant->schedules()->delete();
+
+        if ($rows !== []) {
+            $restaurant->schedules()->createMany($rows);
+        }
+    }
+
+    /**
+     * Normalise a structured shift payload into the stored column shape.
+     *
+     * `spans_next_day` is derived from the clock values instead of trusted from
+     * the client, so the database constraint can never be violated by a stale
+     * or malicious flag.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function normalizeShift(array $item): array
+    {
+        $open = $this->normalizeTime((string) $item['open_time']);
+        $close = $this->normalizeTime((string) $item['close_time']);
+
+        return [
+            'day_of_week'    => (int) $item['day_of_week'],
+            'open_time'      => $open,
+            'close_time'     => $close,
+            'spans_next_day' => $close < $open,
+        ];
+    }
+
+    private function normalizeTime(string $value): string
+    {
+        $value = trim($value);
+        $format = substr_count($value, ':') === 2 ? 'H:i:s' : 'H:i';
+
+        $carbon = Carbon::createFromFormat($format, $value);
+
+        if ($carbon === false) {
+            throw new \InvalidArgumentException("Invalid time value: {$value}");
+        }
+
+        return $carbon->format('H:i:s');
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function deduplicateAndSort(array $rows): array
+    {
+        $unique = [];
+
+        foreach ($rows as $row) {
+            $key = implode('|', [
+                $row['day_of_week'],
+                $row['open_time'],
+                $row['close_time'],
+            ]);
+
+            $unique[$key] = $row;
+        }
+
+        $rows = array_values($unique);
+
+        usort($rows, fn (array $a, array $b) => [
+            $a['day_of_week'], $a['open_time'], $a['close_time'],
+        ] <=> [
+            $b['day_of_week'], $b['open_time'], $b['close_time'],
+        ]);
+
+        return $rows;
     }
 
     /**
@@ -227,13 +303,13 @@ class RestaurantController extends Controller
         $restaurant = Restaurant::find($id);
 
         if (!$restaurant) {
-            return response()->json(['message' => 'Restoran tidak ditemukan'], 404);
+            return response()->json(['message' => 'Restaurant not found'], 404);
         }
 
         $restaurant->delete();
 
         return response()->json([
-            'message' => 'Restoran berhasil dihapus',
+            'message' => 'Restaurant deleted successfully',
         ]);
     }
 
