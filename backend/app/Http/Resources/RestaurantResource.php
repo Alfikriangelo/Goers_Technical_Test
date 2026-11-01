@@ -23,7 +23,7 @@ class RestaurantResource extends JsonResource
             'name'               => $this->name,
             'formatted_schedule' => $this->formatted_schedule,
             'cuisine_type'       => $this->cuisine_type ?? 'General Dining',
-            'address'            => $this->address ?? 'San Francisco, CA',
+            'address'            => $this->address ?? 'Indonesia',
             'rating'             => (float) ($this->rating ?? 4.5),
             'description'        => $this->description,
             'is_open_now'        => (bool) $this->is_open_now,

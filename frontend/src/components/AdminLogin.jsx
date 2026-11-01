@@ -21,16 +21,7 @@ export default function AdminLogin({ onSubmit, busy, error }) {
           Adding, editing, and deleting restaurant records requires a Sanctum token. Sign in with
           the seeded admin account to unlock the write actions.
         </p>
-        <dl className="auth-meta">
-          <div>
-            <dt className="stat-label">Seeded account</dt>
-            <dd className="mono">admin@goers.co</dd>
-          </div>
-          <div>
-            <dt className="stat-label">Seeded password</dt>
-            <dd className="mono">password</dd>
-          </div>
-        </dl>
+
       </div>
 
       <form className="auth-form" onSubmit={handleSubmit}>

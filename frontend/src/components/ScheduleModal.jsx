@@ -39,12 +39,12 @@ export default function ScheduleModal({ restaurant, onClose }) {
       >
         <div className="sheet-head">
           <div>
-            <p className="eyebrow">Weekly shifts</p>
+            <p className="eyebrow">Weekly Schedule</p>
             <h2 className="sheet-title" id="schedule-sheet-title">
               {restaurant.name}
             </h2>
             <p className="sheet-sub">
-              {restaurant.cuisine_type || 'Dining'} · {restaurant.address || 'San Francisco, CA'}
+              {restaurant.cuisine_type || 'Dining'} · {restaurant.address || 'Indonesia'}
             </p>
           </div>
           <button type="button" className="close-btn" onClick={onClose} aria-label="Close panel">
@@ -62,7 +62,7 @@ export default function ScheduleModal({ restaurant, onClose }) {
               </strong>
             </div>
             <div className="schedule-fact">
-              <span className="schedule-fact-label">Weekly services</span>
+              <span className="schedule-fact-label">Weekly shifts</span>
               <strong>{shiftCount}</strong>
             </div>
             <div className="schedule-fact schedule-fact-wide">
@@ -78,7 +78,7 @@ export default function ScheduleModal({ restaurant, onClose }) {
                   <th scope="col">Day</th>
                   <th scope="col">Service</th>
                   <th scope="col">Hours</th>
-                  <th scope="col">Boundary</th>
+                  <th scope="col">Schedule Note</th>
                 </tr>
               </thead>
               <tbody>

@@ -218,7 +218,7 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
         err.response?.data?.message ||
         Object.values(err.response?.data?.errors || {})?.[0]?.[0] ||
         err.message ||
-        'The record could not be saved.';
+        'The restaurant could not be saved.';
       setError(message);
     } finally {
       setLoading(false);
@@ -239,11 +239,11 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
       >
         <div className="sheet-head">
           <div>
-            <p className="eyebrow">{initialData ? 'Edit record' : 'New record'}</p>
+            <p className="eyebrow">{initialData ? 'Edit restaurant' : 'New restaurant'}</p>
             <h2 className="sheet-title" id="restaurant-sheet-title">
               {initialData ? initialData.name : 'Add a restaurant'}
             </h2>
-            <p className="sheet-sub">Weekly shifts · stored as structured rows</p>
+            <p className="sheet-sub">Weekly operating hours and dining schedule</p>
           </div>
           <button type="button" className="close-btn" onClick={onClose} aria-label="Close panel">
             <X size={18} strokeWidth={1.6} />
@@ -282,7 +282,7 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
             <div className="hours-head">
               <span className="form-label">Operating hours</span>
               <span className="hours-meta">
-                {openDays}/7 days · {services} services
+                {openDays}/7 days · {services} shifts
               </span>
             </div>
 
@@ -350,7 +350,7 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
                         onClick={() => addShift(day.day_of_week)}
                       >
                         <Plus size={13} strokeWidth={1.8} />
-                        Add service
+                        Add shift
                       </button>
                     </div>
                   )}
@@ -368,9 +368,8 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
             </div>
 
             <p className="form-hint">
-              Each row is a real service window stored in the database. Add a second service for
-              lunch and dinner; leave the day closed when there is no service. A window that ends
-              earlier than it starts is treated as after midnight.
+              Set standard opening hours for each day. Add a second shift if closed between lunch
+              and dinner. Hours ending earlier than they open are treated as past midnight.
             </p>
           </div>
 
@@ -417,7 +416,7 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
               id="modal-address"
               type="text"
               className="form-input"
-              placeholder="123 Market St, San Francisco, CA"
+              placeholder="Jl. Jenderal Sudirman No. 12, Jakarta"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             />
@@ -431,7 +430,7 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
               id="modal-desc"
               className="form-input"
               rows={3}
-              placeholder="Optional note for the admin record"
+              placeholder="Additional information or notes about the restaurant"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
@@ -444,7 +443,7 @@ export default function RestaurantModal({ isOpen, onClose, onSave, initialData =
           </button>
           <button type="submit" form="restaurant-form" className="btn btn-primary" disabled={loading}>
             <Save size={15} strokeWidth={1.6} />
-            {loading ? 'Saving…' : initialData ? 'Save changes' : 'Create record'}
+            {loading ? 'Saving…' : initialData ? 'Save changes' : 'Add restaurant'}
           </button>
         </div>
       </div>

@@ -72,7 +72,7 @@ class Restaurant extends Model
      */
     public function getIsOpenNowAttribute(): bool
     {
-        $now = Carbon::now();
+        $now = Carbon::now('Asia/Jakarta');
         $currentDay = (int) $now->isoFormat('E'); // 1 (Mon) - 7 (Sun)
         $currentTime = $now->format('H:i:s');
 

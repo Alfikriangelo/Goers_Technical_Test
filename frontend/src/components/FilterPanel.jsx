@@ -89,7 +89,7 @@ export default function FilterPanel({
 
         <div className="query-actions">
           <button id="btn-reset-filters" type="button" className="btn btn-quiet" onClick={onResetFilters}>
-            Clear query
+            Clear Filter
           </button>
         </div>
       </div>
